@@ -1,4 +1,3 @@
-Certainly! Here’s a human-friendly version of the README.md file for your Hindi TTS speech synthesizer project:
 
 Hindi TTS l-hindi-text-to-speech
 
