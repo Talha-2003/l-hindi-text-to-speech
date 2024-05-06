@@ -1,44 +1,72 @@
+# amp: Automatic Mixed Precision
 
+## Annotating User Functions
 
-Hindi TTS Speech Synthesizer(l-hindi-text-to-speech)
-Overview
-Welcome to our Hindi TTS Speech Synthesizer project! Our mission is to convert written Hindi text into spoken words, sounding as natural and clear as possible. We’re harnessing the power of machine learning to make it happen
+Nearly all PyTorch user code needs nothing more than the two steps
+above to use amp. After all, custom layers are built out of simpler
+PyTorch components, and amp already can see those.
 
+However, any custom C++ or CUDA code is outside of amp's (default)
+view of things. For example, suppose I implemented a new recurrent
+cell called a "forgetful recurrent unit" that calls directly into a
+CUDA backend:
 
-# l-hindi-text-to-speech
+```python
+from backend import FRUBackend
 
+def fru(input, hidden, weight, bias):
+    # call to CUDA code
+    FRUBackend(input, hidden, weight, bias)
+```
 
-## Overview
-This project aims to develop a Text-to-Speech (TTS) synthesizer for the Hindi language, utilizing advanced machine learning techniques for corpus generation and audio synthesis. The goal is to create a system that can convert written Hindi text into natural-sounding speech.
+In this case, it is possible to get a runtime type mismatch. For
+example, you might have `input` in fp16, and `weight` in fp32, and amp
+doesn't have the visibility to insert an appropriate cast.
 
-## Features
-- **Corpus Generation**: Automated scripts to generate a rich linguistic corpus suitable for training TTS models.
-- **Audio Synthesis**: Integration of state-of-the-art neural network models to produce clear and natural Hindi speech.
-- **Customizable Voices**: Ability to adjust voice characteristics such as pitch, speed, and tone.
-- **Support for SSML**: Implementation of Speech Synthesis Markup Language (SSML) for fine-grained control over speech output.
+amp exposes two ways to handle "invisible" backend code: function
+annotations and explicit registration.
 
-## Architecture Diagram
-!Architecture Diagram
-*The architecture diagram illustrates the workflow from text input to speech output.*
+#### Function annotation
 
-## Getting Started
-### Prerequisites
-- Python 3.8 or higher
-- PyTorch 1.7 or higher
-- Librosa, NumPy, and other Python libraries
+The first way to handle backend code is a set of function annotations:
 
-### Installation
-```bash
-git clone https://github.com/Talha-2003/hindi-tts-synthesizer.git
-cd hindi-tts-synthesizer
-pip install -r requirements.txt
+- `@amp.half_function`
+- `@amp.float_function`
+- `@amp.promote_function`
 
-##Contributing
-Contributions to improve the Hindi TTS Speech Synthesizer are welcome. Please read CONTRIBUTING.md for details on our code of conduct, and the process for submitting pull requests
+These correspond to:
 
+- Cast all arguments to fp16
+- Cast all argumnets fo fp32
+- If there are any type mismatches, cast everything to the widest type
 
-##License
-This project is licensed under the Apache License 2.0  - see the LICENSE.md file for details.
+In our example, we believe that the FRU unit is fp16-safe and will get
+performance gains from casting its arguments to fp16, so we write:
 
-Shoutouts
-Big thanks to everyone who’s contributed to this project and to the open-source tools we use. 
+```python
+@amp.half_function
+def fru(input, hidden, weight, bias):
+    #...
+```
+
+#### Explicit registration
+
+The other way to handle backend code is with explicit function
+registration:
+
+- `amp.register_half_function(module, function_name)`
+- `amp.register_float_function(module, function_name)`
+- `amp.register_promote_function(module, function_name)`
+
+When using this API, `module` is the containing class or module for
+the function, and `function_name` is the _string_ name of the
+function. Note that the function must be registered before the call to
+`amp.initalize()`.
+
+For our FRU unit, we can register the backend function directly:
+
+```python
+import backend
+
+amp.register_half_function(backend, 'FRUBackend')
+```
