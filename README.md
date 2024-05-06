@@ -1,6 +1,6 @@
-Certainly! Here’s a human-friendly version of the README.md file for your Hindi TTS speech synthesizer project:
 
-Hindi TTS Speech Synthesizer
+
+Hindi TTS Speech Synthesizer(l-hindi-text-to-speech)
 Overview
 Welcome to our Hindi TTS Speech Synthesizer project! Our mission is to convert written Hindi text into spoken words, sounding as natural and clear as possible. We’re harnessing the power of machine learning to make it happen
 
